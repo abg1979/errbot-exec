@@ -1,73 +1,59 @@
 # -*- coding: utf-8 -*-
 import os, re, subprocess
 from errbot import BotPlugin, botcmd, re_botcmd, ValidationException
+from subprocess import Popen
+import logging
 
 class Exec(BotPlugin):
     """
     Execute a command when the bot is talked to
     """
 
-    config_template = {
-        'command': u'echo'
-    }
-
-    def activate(self):
-        """
-        Load configuration from config.by
-        """
-        super(Exec, self).activate()
-        if (self.config == None and self.bot_config.EXEC):
-            self.check_configuration(self.bot_config.EXEC)
-            self.configure(self.bot_config.EXEC)
-
-    def executable_exists(self, name):
-        """
-        Check if an executable exists
-        """
-        if len(name) == 0:
-            raise ValidationException('Command is empty')
-
-        if os.path.exists(name):
-            return
-
-        found = False
-        for path in os.environ['PATH'].split(os.pathsep):
-            fullpath = path + os.sep + name
-            if os.path.exists(fullpath):
-                found = True
-                break
-        if not found:
-            raise ValidationException('Command not in PATH')
-
-    def get_configuration_template(self):
-        """
-        Defines the configuration structure this plugin supports
-        """
-        return self.config_template
-
-    def check_configuration(self, configuration):
-        """
-        Triggers when the configuration is checked, shortly before activation
-        """
-        super(Exec, self).check_configuration(configuration)
-        self.executable_exists(configuration['command'])
-
-    @re_botcmd(pattern=r".*", prefixed=False)
-    def runexec(self, msg, match):
+    @botcmd(split_args_with=' ', template="output")
+    def run_exec(self, msg, args):
         """
         Execute the commmand
         """
-        try:
-            output = subprocess.check_output(
-                [self.config['command'], msg.body, str(msg.frm)],
-                stderr=subprocess.STDOUT
-            )
-            if len(output) > 0:
-                return str(output, 'utf-8')
-            else:
-                return "OK\n"
-        except subprocess.CalledProcessError as err:
-            if len(err.output):
-                return str(err.output, 'utf-8')
-            else:
-                return "Error"
+        ret_code, stdout, stderr = self.run_cmd(args)
+        return {'stdout': stdout, 'stderr': stderr, 'return_code': ret_code}
+
+    def run_cmd(self, args, log_level='DEBUG'):
+        process = Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, err_output = process.communicate()
+        retcode = process.poll()
+
+        if output is not None:
+            for subprocess_output_line in output.splitlines():
+                self.log.log(logging.getLevelName(log_level), 'STDOUT: %s' % subprocess_output_line)
+        if err_output is not None:
+            for subprocess_error_line in err_output.splitlines():
+                self.log.log(logging.getLevelName(log_level), 'STDERR: %s' % subprocess_error_line)
+        return retcode, output, err_output
+
+
+class ProcessExecutionException(Exception):
+    """This exception is raised when a process run by check_call() or
+    check_output() returns a non-zero exit status.
+    The exit status will be stored in the returncode attribute;
+    check_output() will also store the output in the output attribute.
+    """
+
+    def __init__(self, exception=None, returncode=0, cmd=None, output=None, *args, **kwargs):
+        super(ProcessExecutionException, self).__init__(*args, **kwargs)
+        if exception is not None:
+            if hasattr(exception, 'returncode'):
+                self.returncode = exception.returncode
+            if hasattr(exception, 'cmd'):
+                self.cmd = exception.cmd
+            if hasattr(exception, 'output'):
+                self.output = exception.output
+        else:
+            self.returncode = returncode
+            self.cmd = cmd
+            self.output = output
+
+    def __str__(self):
+        return "Command '%s' returned non-zero exit status %d" % (self.cmd, self.returncode)
+
+
+

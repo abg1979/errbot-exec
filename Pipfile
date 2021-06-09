@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+jira = "*"
+oauth2 = "*"
+requests = "*"
+requests-oauthlib = "*"
+ipython = "*"
+filemagic = "*"
+tlslite = "*"
+retrying = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"

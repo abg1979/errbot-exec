@@ -5,9 +5,3 @@ module = exec
 [Documentation]
 description = Execute a command when the bot is talked to
 
-[Python]
-version = 2+
-
-[Errbot]
-min = 5.0.0
-max = 5.99.99
